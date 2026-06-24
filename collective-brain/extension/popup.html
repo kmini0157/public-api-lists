@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      body { width: 280px; font-family: system-ui, sans-serif; margin: 0; padding: 14px; background: #181b22; color: #e7e9ee; }
+      h1 { font-size: 0.95rem; margin: 0 0 10px; }
+      .url { font-size: 0.75rem; color: #9aa3b2; word-break: break-all; margin-bottom: 10px; }
+      label { font-size: 0.7rem; color: #9aa3b2; display: block; margin-bottom: 4px; }
+      input { width: 100%; box-sizing: border-box; background: #11141a; color: #e7e9ee; border: 1px solid #272b35; border-radius: 7px; padding: 7px; margin-bottom: 10px; font-size: 0.8rem; }
+      button { width: 100%; background: #6ea8fe; color: #0b0e14; border: 0; padding: 9px; border-radius: 7px; font-weight: 700; cursor: pointer; }
+      button:disabled { opacity: 0.5; }
+      .msg { font-size: 0.78rem; color: #9aa3b2; margin-top: 8px; min-height: 1em; }
+    </style>
+  </head>
+  <body>
+    <h1>🧠 Save to Collective Brain</h1>
+    <div class="url" id="url">…</div>
+    <label for="server">서버 주소</label>
+    <input id="server" type="text" value="http://localhost:8787" />
+    <button id="save">이 페이지 저장</button>
+    <div class="msg" id="msg"></div>
+    <script src="popup.js"></script>
+  </body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Collective Brain — Save",
+  "version": "0.1.0",
+  "description": "One-click save the current page (or a YouTube/PDF) into your Collective Brain.",
+  "permissions": ["activeTab", "scripting", "storage", "contextMenus"],
+  "host_permissions": ["http://localhost/*", "http://127.0.0.1/*"],
+  "background": { "service_worker": "background.js" },
+  "action": {
+    "default_title": "Save to Collective Brain",
+    "default_popup": "popup.html"
+  }
+}

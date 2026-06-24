@@ -1,0 +1,18 @@
+{
+  "name": "collective-brain",
+  "version": "0.1.0",
+  "description": "Forward anything, ask anything — a zero-cost collective second brain (web + browser extension) built on free APIs.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.7",
+    "@huggingface/transformers": "^4.2.0",
+    "hono": "^4.6.14"
+  }
+}

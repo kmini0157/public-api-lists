@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Collective Brain</title>
+    <link rel="stylesheet" href="/style.css" />
+    <!-- Puter.js: key-less, client-side LLM for RAG answers -->
+    <script src="https://js.puter.com/v2/"></script>
+  </head>
+  <body>
+    <header>
+      <h1>🧠 Collective Brain</h1>
+      <p class="tagline">Forward anything, ask anything.</p>
+      <span id="stats" class="stats"></span>
+    </header>
+
+    <section class="card">
+      <label for="saveUrl">새 자료 저장 (아티클 · 유튜브 · PDF 링크)</label>
+      <div class="row">
+        <input id="saveUrl" type="url" placeholder="https://… 링크를 붙여넣으세요" />
+        <button id="saveBtn">저장</button>
+      </div>
+      <p id="saveMsg" class="msg"></p>
+    </section>
+
+    <section class="card">
+      <label for="q">질문하거나 검색하기</label>
+      <div class="row">
+        <input id="q" type="text" placeholder="예: 우리가 저장한 RAG 관련 핵심이 뭐였지?" />
+        <button id="askBtn">질문</button>
+        <button id="searchBtn" class="secondary">검색</button>
+      </div>
+      <div id="answer" class="answer hidden"></div>
+      <div id="results" class="results"></div>
+    </section>
+
+    <section class="card">
+      <div class="row between">
+        <label>최근 저장</label>
+        <button id="refreshBtn" class="secondary small">새로고침</button>
+      </div>
+      <ul id="items" class="items"></ul>
+    </section>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
