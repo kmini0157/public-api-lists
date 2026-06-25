@@ -1,0 +1,20 @@
+{
+  "name": "Voice Inbox — 말하면 정리되는 음성 인박스",
+  "short_name": "Voice Inbox",
+  "description": "말하면 AI가 할일·아이디어·메모·질문으로 자동 분류하고, 나중에 무엇이든 물어볼 수 있는 음성 인박스.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f1115",
+  "theme_color": "#0b1020",
+  "lang": "ko",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

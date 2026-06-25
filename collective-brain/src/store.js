@@ -58,6 +58,16 @@ export async function getItem(id) {
   return db.items.find((i) => i.id === id) ?? null;
 }
 
+// Patch a stored item in place (e.g. toggle a task's `done`, fix its `type`).
+export async function updateItem(id, patch) {
+  await ensureLoaded();
+  const it = db.items.find((i) => i.id === id);
+  if (!it) return null;
+  Object.assign(it, patch);
+  await flush();
+  return it;
+}
+
 export async function findByUrl(url) {
   await ensureLoaded();
   return db.items.find((i) => i.url === url) ?? null;
