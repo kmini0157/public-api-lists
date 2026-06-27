@@ -130,6 +130,7 @@ let inboxFilter = "all";
 async function loadInbox() {
   const { items } = await api("/api/items?limit=200");
   const captures = (items || []).filter((i) => i.kind === "capture");
+  notifyDue(captures);
   const box = $("inbox");
   const shown = captures.filter((i) => inboxFilter === "all" || i.type === inboxFilter);
 
@@ -154,19 +155,19 @@ async function loadInbox() {
           <span class="when">${timeAgo(it.createdAt)}</span>
           ${it.source === "telegram" ? "<span class='src'>✈️</span>" : ""}
         </div>
+        ${isTask && !it.done ? remindRow(it) : ""}
         ${it.text && it.text !== it.title ? `<details class="full"><summary>전문</summary><p>${escapeHtml(it.text)}</p></details>` : ""}
       </div>
       <button class="del" title="삭제" data-id="${it.id}">✕</button>`;
 
     if (isTask) {
       li.querySelector(".check").onclick = async (e) => {
-        await api(`/api/items/${it.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ done: e.target.checked }),
-        });
+        await patchItem(it.id, { done: e.target.checked });
         loadInbox();
       };
+      li.querySelectorAll(".rbtn").forEach((b) => {
+        b.onclick = () => handleRemind(it.id, b.dataset);
+      });
     }
     li.querySelector(".del").onclick = async () => {
       await api(`/api/items/${it.id}`, { method: "DELETE" });
@@ -175,6 +176,86 @@ async function loadInbox() {
     };
     box.appendChild(li);
   }
+}
+
+// --- Reminders ---------------------------------------------------------------
+// Reminder row under a task: due badge + quick snooze/clear. The server fires
+// the actual notifications (ntfy / telegram); the browser one below is a bonus
+// for when this tab is open.
+function remindRow(it) {
+  const now = Date.now();
+  const badge = it.remindAt
+    ? `<span class="rbadge ${it.remindAt <= now ? "over" : ""}">⏰ ${fmtRemind(it.remindAt)}</span>`
+    : `<span class="rbadge none">알림 없음</span>`;
+  return `<div class="remind">
+      ${badge}
+      <button class="rbtn" data-act="snooze" data-min="60">+1시간</button>
+      <button class="rbtn" data-act="tomorrow">내일 아침</button>
+      ${it.remindAt ? `<button class="rbtn clr" data-act="clear">해제</button>` : ""}
+    </div>`;
+}
+
+async function handleRemind(id, ds) {
+  let body;
+  if (ds.act === "snooze") body = { snoozeMinutes: Number(ds.min) };
+  else if (ds.act === "tomorrow") body = { remindAt: tomorrowMorning() };
+  else body = { remindAt: null };
+  await patchItem(id, body);
+  loadInbox();
+}
+
+const patchItem = (id, body) =>
+  api(`/api/items/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+function tomorrowMorning() {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  d.setHours(9, 0, 0, 0);
+  return d.getTime();
+}
+
+function fmtRemind(ts) {
+  const d = new Date(ts);
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  const a = new Date(ts);
+  a.setHours(0, 0, 0, 0);
+  const b = new Date();
+  b.setHours(0, 0, 0, 0);
+  const diff = Math.round((a - b) / 86400000);
+  const day = diff === 0 ? "오늘" : diff === 1 ? "내일" : diff === 2 ? "모레" : `${d.getMonth() + 1}/${d.getDate()}`;
+  return `${day} ${hh}:${mm}`;
+}
+
+// In-tab browser notifications for tasks that just came due (server still pushes
+// to ntfy/telegram independently). Keyed by id+time so a snooze re-alerts.
+const notifiedDue = new Set();
+function notifyDue(captures) {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  const now = Date.now();
+  for (const it of captures) {
+    if (it.type !== "task" || it.done || !it.remindAt || it.remindAt > now) continue;
+    const key = `${it.id}:${it.remindAt}`;
+    if (notifiedDue.has(key)) continue;
+    notifiedDue.add(key);
+    try {
+      new Notification("⏰ 할일 알림", { body: it.title, tag: it.id });
+    } catch {}
+  }
+}
+
+function refreshNotifyBtn() {
+  const b = $("notifyBtn");
+  if (!b) return;
+  if (!("Notification" in window)) {
+    b.style.display = "none";
+    return;
+  }
+  b.textContent = Notification.permission === "granted" ? "🔔 알림 켜짐" : "🔔 알림 켜기";
 }
 
 // --- Ask / Search (retrieval + Puter RAG) ------------------------------------
@@ -314,6 +395,12 @@ $("typeBtn").onclick = () => {
 };
 $("typeInput").addEventListener("keydown", (e) => e.key === "Enter" && $("typeBtn").click());
 $("refreshBtn").onclick = loadInbox;
+$("notifyBtn")?.addEventListener("click", async () => {
+  if ("Notification" in window) {
+    await Notification.requestPermission();
+    refreshNotifyBtn();
+  }
+});
 $("askBtn").onclick = ask;
 $("searchBtn").onclick = search;
 $("q").addEventListener("keydown", (e) => e.key === "Enter" && ask());
@@ -333,5 +420,11 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").catch(() => {});
 }
 
+refreshNotifyBtn();
 loadInbox();
 loadStats();
+
+// Re-check the inbox each minute so due reminders surface while the tab is open.
+setInterval(() => {
+  if (!recording) loadInbox();
+}, 60_000);

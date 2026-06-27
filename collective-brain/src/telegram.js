@@ -3,8 +3,10 @@
 // message (or text) and it transcribes → classifies → stores, then replies with
 // what it filed.
 import { transcribe } from "./stt.js";
+import { formatRemind } from "./datetime.js";
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const CHAT = process.env.TELEGRAM_CHAT_ID; // default target for digests
 const apiUrl = (m) => `https://api.telegram.org/bot${TOKEN}/${m}`;
 const fileUrl = (p) => `https://api.telegram.org/file/bot${TOKEN}/${p}`;
 
@@ -13,12 +15,25 @@ export function telegramEnabled() {
 }
 
 async function send(chatId, text) {
-  if (!TOKEN) return;
-  await fetch(apiUrl("sendMessage"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text }),
-  }).catch(() => {});
+  if (!TOKEN) return false;
+  try {
+    const r = await fetch(apiUrl("sendMessage"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text }),
+    });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+
+// Reminder/digest channel. Sends to the capture's own chat when known, else to
+// the configured TELEGRAM_CHAT_ID. No-op (false) if telegram isn't set up.
+export async function broadcast(text, chatId) {
+  const to = chatId || CHAT;
+  if (!TOKEN || !to) return false;
+  return send(to, text);
 }
 
 async function download(fileId) {
@@ -50,9 +65,13 @@ export async function handleUpdate(update, { storeCapture, triage }) {
       return;
     }
     const t = await triage(text);
-    const item = await storeCapture({ text, ...t, source: "telegram" });
+    const item = await storeCapture({ text, ...t, source: "telegram", chatId });
     const tagLine = item.tags?.length ? `\n#${item.tags.join(" #")}` : "";
-    await send(chatId, `${EMOJI[item.type] || "📝"} ${item.type} 저장됨\n“${item.title}”${tagLine}`);
+    const remindLine = item.remindAt ? `\n⏰ ${formatRemind(item.remindAt)} 알림` : "";
+    await send(
+      chatId,
+      `${EMOJI[item.type] || "📝"} ${item.type} 저장됨\n“${item.title}”${tagLine}${remindLine}`,
+    );
   } catch (e) {
     await send(chatId, "처리 중 오류가 났어요: " + e.message);
     throw e;

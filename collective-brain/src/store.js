@@ -53,6 +53,28 @@ export async function allChunks() {
   return db.chunks;
 }
 
+// Captures whose reminder has arrived and haven't been notified for it yet.
+// (remindedAt < remindAt covers a snoozed/re-set reminder firing again.)
+export async function dueReminders(now = Date.now()) {
+  await ensureLoaded();
+  return db.items.filter(
+    (i) =>
+      i.kind === "capture" &&
+      i.remindAt &&
+      !i.done &&
+      i.remindAt <= now &&
+      (!i.remindedAt || i.remindedAt < i.remindAt),
+  );
+}
+
+// Open (not-done) tasks, soonest reminder first, undated last.
+export async function openTasks() {
+  await ensureLoaded();
+  return db.items
+    .filter((i) => i.kind === "capture" && i.type === "task" && !i.done)
+    .sort((a, b) => (a.remindAt || Infinity) - (b.remindAt || Infinity));
+}
+
 export async function getItem(id) {
   await ensureLoaded();
   return db.items.find((i) => i.id === id) ?? null;

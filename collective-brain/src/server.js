@@ -13,6 +13,9 @@ import { embedPassage, embedQuery, cosine, warmup } from "./embed.js";
 import * as store from "./store.js";
 import { triage } from "./triage.js";
 import { handleUpdate, telegramEnabled } from "./telegram.js";
+import { parseRemindAt } from "./datetime.js";
+import { startScheduler, runDigest } from "./reminders.js";
+import { channelSummary } from "./notify.js";
 
 const app = new Hono();
 app.use("/api/*", cors()); // allow the browser extension / PWA to call us
@@ -85,12 +88,31 @@ app.post("/capture", async (c) => {
     actions ||= t.actions;
   }
 
-  const item = await storeCapture({ text, type, title, tags, actions, source: body.source || "pwa" });
+  const item = await storeCapture({
+    text,
+    type,
+    title,
+    tags,
+    actions,
+    source: body.source || "pwa",
+    remindAt: typeof body.remindAt === "number" ? body.remindAt : undefined,
+  });
   return c.json({ ok: true, item: shape(item) });
 });
 
 // Embed a free-text note and store it as a capture item (searchable like sources).
-async function storeCapture({ text, type, title, tags = [], actions = [], source = "pwa" }) {
+// A task's reminder time is taken from an explicit remindAt, otherwise parsed
+// from the note itself ("내일 3시까지 …") so capture stays one step.
+async function storeCapture({
+  text,
+  type,
+  title,
+  tags = [],
+  actions = [],
+  source = "pwa",
+  chatId = null,
+  remindAt,
+}) {
   const id = newId();
   const pieces = chunk(text);
   const chunks = [];
@@ -102,16 +124,22 @@ async function storeCapture({ text, type, title, tags = [], actions = [], source
       embedding: await embedPassage(pieces[i]),
     });
   }
+  const finalType = CAPTURE_TYPES.has(type) ? type : "note";
+  const remind =
+    typeof remindAt === "number" ? remindAt : finalType === "task" ? parseRemindAt(text) : null;
   const item = {
     id,
     kind: "capture",
-    type: CAPTURE_TYPES.has(type) ? type : "note",
+    type: finalType,
     title: (title || text.slice(0, 50)).trim(),
     text,
     tags: Array.isArray(tags) ? tags.slice(0, 6) : [],
     actions: Array.isArray(actions) ? actions.slice(0, 8) : [],
     done: false,
     source,
+    chatId: chatId || null,
+    remindAt: remind || null,
+    remindedAt: null,
     excerpt: text.slice(0, 280),
     chunkCount: chunks.length,
     createdAt: Date.now(),
@@ -154,10 +182,25 @@ app.patch("/api/items/:id", async (c) => {
   if (typeof body.done === "boolean") patch.done = body.done;
   if (CAPTURE_TYPES.has(body.type)) patch.type = body.type;
   if (typeof body.title === "string" && body.title.trim()) patch.title = body.title.trim();
+  // Reminder controls: set/clear an exact time, or snooze N minutes from now.
+  // Any change resets remindedAt so the new time fires.
+  if (typeof body.snoozeMinutes === "number") {
+    patch.remindAt = Date.now() + body.snoozeMinutes * 60_000;
+    patch.remindedAt = null;
+  } else if (typeof body.remindAt === "number") {
+    patch.remindAt = body.remindAt;
+    patch.remindedAt = null;
+  } else if (body.remindAt === null) {
+    patch.remindAt = null;
+    patch.remindedAt = null;
+  }
   const it = await store.updateItem(c.req.param("id"), patch);
   if (!it) return c.json({ error: "not found" }, 404);
   return c.json({ ok: true, item: shape(it) });
 });
+
+// Send the daily digest now (also runs automatically once a day).
+app.post("/api/digest", async (c) => c.json({ ok: true, text: await runDigest() }));
 
 // --- Semantic search / retrieval ---------------------------------------------
 // Returns the top-k matching chunks with their source item. The web app uses
@@ -199,6 +242,8 @@ function shape({ embedding, ...rest }) {
 const port = Number(process.env.PORT) || 8787;
 console.log(`Collective Brain → http://localhost:${port}`);
 console.log(`Telegram capture: ${telegramEnabled() ? "enabled" : "disabled (set TELEGRAM_BOT_TOKEN)"}`);
+console.log(`Reminder channels: ${channelSummary()}`);
+startScheduler();
 console.log("Warming up embedding model (first run downloads ~120MB)…");
 warmup().then(
   () => console.log("Embedding model ready."),

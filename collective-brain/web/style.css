@@ -191,6 +191,36 @@ details summary { cursor: pointer; color: var(--muted); font-size: 0.88rem; }
 .capture-item .del:hover { color: #ff6b6b; }
 .src-cap { color: var(--text); font-weight: 600; font-size: 0.85rem; }
 
+/* --- Reminder row -------------------------------------------------------- */
+.remind {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+.rbadge {
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  background: var(--accent-2);
+  color: #cdd6ff;
+}
+.rbadge.over { background: #3a1f22; color: #ff9b9b; }
+.rbadge.none { background: transparent; color: var(--muted); font-weight: 500; padding-left: 0; }
+.rbtn {
+  background: none;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+.rbtn:hover { color: var(--text); border-color: var(--accent); filter: none; }
+.rbtn.clr:hover { color: #ff9b9b; border-color: #ff6b6b; }
+
 @media (max-width: 560px) {
   .mic { width: 84px; height: 84px; font-size: 2.1rem; }
   .card { margin: 12px; }
