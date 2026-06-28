@@ -4,7 +4,7 @@
 // (remindedAt is persisted) — at worst it re-sends the day's digest once.
 import * as store from "./store.js";
 import { notify } from "./notify.js";
-import { formatRemind } from "./datetime.js";
+import { formatRemind, describeRepeat, nextOccurrence } from "./datetime.js";
 
 const DAY = 86_400_000;
 const TICK = Number(process.env.REMINDER_TICK_MS) || 60_000;
@@ -35,13 +35,21 @@ async function fireDue(now) {
       chatId: it.chatId,
       priority: it.remindAt < now - DAY ? 4 : undefined, // long-overdue → louder
     });
-    await store.updateItem(it.id, { remindedAt: now });
+    if (it.repeat) {
+      // Recurring: roll to the next future run instead of marking it done.
+      let next = nextOccurrence(it.repeat, it.remindAt);
+      for (let i = 0; next <= now && i < 1200; i++) next = nextOccurrence(it.repeat, next);
+      await store.updateItem(it.id, { remindAt: next, remindedAt: null });
+    } else {
+      await store.updateItem(it.id, { remindedAt: now });
+    }
   }
 }
 
 function reminderBody(it, now) {
   const overdue = it.remindAt < now - 90_000;
   const lines = [overdue ? `예정: ${formatRemind(it.remindAt, now)} (지남)` : "지금 할 시간이에요"];
+  if (it.repeat) lines[0] += ` · 🔁 ${describeRepeat(it.repeat, it.remindAt)}`;
   if (it.actions?.length) lines.push(...it.actions.map((a) => `• ${a}`));
   else if (it.text && it.text !== it.title) lines.push(it.text.slice(0, 200));
   return lines.join("\n");
@@ -72,7 +80,9 @@ function buildDigest(tasks, recent, now) {
   const overdue = tasks.filter((t) => t.remindAt && t.remindAt <= now);
   const lines = [`열린 할일 ${tasks.length}개${overdue.length ? ` · 지난 ${overdue.length}개` : ""}`];
   for (const t of tasks.slice(0, 10)) {
-    lines.push(`• ${t.title}${t.remindAt ? ` — ${formatRemind(t.remindAt, now)}` : ""}`);
+    const when = t.remindAt ? ` — ${formatRemind(t.remindAt, now)}` : "";
+    const rep = t.repeat ? ` 🔁${describeRepeat(t.repeat, t.remindAt)}` : "";
+    lines.push(`• ${t.title}${when}${rep}`);
   }
   if (tasks.length > 10) lines.push(`…외 ${tasks.length - 10}개`);
   if (recent.length) lines.push(`\n최근 24시간 새 캡처 ${recent.length}개`);

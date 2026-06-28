@@ -187,18 +187,31 @@ function remindRow(it) {
   const badge = it.remindAt
     ? `<span class="rbadge ${it.remindAt <= now ? "over" : ""}">⏰ ${fmtRemind(it.remindAt)}</span>`
     : `<span class="rbadge none">알림 없음</span>`;
+  const rep = it.repeat ? `<span class="rbadge rep">🔁 ${describeRepeat(it)}</span>` : "";
   return `<div class="remind">
-      ${badge}
+      ${badge}${rep}
       <button class="rbtn" data-act="snooze" data-min="60">+1시간</button>
       <button class="rbtn" data-act="tomorrow">내일 아침</button>
-      ${it.remindAt ? `<button class="rbtn clr" data-act="clear">해제</button>` : ""}
+      ${it.remindAt && !it.repeat ? `<button class="rbtn clr" data-act="clear">해제</button>` : ""}
+      ${it.repeat ? `<button class="rbtn clr" data-act="unrepeat">반복 해제</button>` : ""}
     </div>`;
+}
+
+function describeRepeat(it) {
+  const r = it.repeat;
+  if (!r) return "";
+  if (r.freq === "daily") return "매일";
+  if (r.freq === "monthly") return it.remindAt ? `매월 ${new Date(it.remindAt).getDate()}일` : "매월";
+  const W = ["일", "월", "화", "수", "목", "금", "토"];
+  const base = r.interval === 2 ? "격주" : "매주";
+  return it.remindAt ? `${base} ${W[new Date(it.remindAt).getDay()]}` : base;
 }
 
 async function handleRemind(id, ds) {
   let body;
   if (ds.act === "snooze") body = { snoozeMinutes: Number(ds.min) };
   else if (ds.act === "tomorrow") body = { remindAt: tomorrowMorning() };
+  else if (ds.act === "unrepeat") body = { repeat: null };
   else body = { remindAt: null };
   await patchItem(id, body);
   loadInbox();

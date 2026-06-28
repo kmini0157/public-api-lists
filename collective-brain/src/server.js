@@ -13,7 +13,7 @@ import { embedPassage, embedQuery, cosine, warmup } from "./embed.js";
 import * as store from "./store.js";
 import { triage } from "./triage.js";
 import { handleUpdate, telegramEnabled } from "./telegram.js";
-import { parseRemindAt } from "./datetime.js";
+import { parseRemindAt, parseRecurrence, nextOccurrence } from "./datetime.js";
 import { startScheduler, runDigest } from "./reminders.js";
 import { channelSummary } from "./notify.js";
 
@@ -124,9 +124,20 @@ async function storeCapture({
       embedding: await embedPassage(pieces[i]),
     });
   }
-  const finalType = CAPTURE_TYPES.has(type) ? type : "note";
-  const remind =
-    typeof remindAt === "number" ? remindAt : finalType === "task" ? parseRemindAt(text) : null;
+  // A recurring phrase ("매주 월요일 …") makes it a task and sets the first run;
+  // otherwise a task gets a one-shot reminder parsed from its own text.
+  let finalType = CAPTURE_TYPES.has(type) ? type : "note";
+  const rec = parseRecurrence(text);
+  let repeat = null;
+  let remind;
+  if (rec) {
+    finalType = "task";
+    repeat = rec.repeat;
+    remind = typeof remindAt === "number" ? remindAt : rec.remindAt;
+  } else {
+    remind =
+      typeof remindAt === "number" ? remindAt : finalType === "task" ? parseRemindAt(text) : null;
+  }
   const item = {
     id,
     kind: "capture",
@@ -138,6 +149,7 @@ async function storeCapture({
     done: false,
     source,
     chatId: chatId || null,
+    repeat,
     remindAt: remind || null,
     remindedAt: null,
     excerpt: text.slice(0, 280),
@@ -177,11 +189,24 @@ app.delete("/api/items/:id", async (c) => {
 
 // Patch a capture: toggle a task's `done`, or correct its `type`/`title`.
 app.patch("/api/items/:id", async (c) => {
+  const id = c.req.param("id");
   const body = await c.req.json().catch(() => ({}));
+  const cur = await store.getItem(id);
+  if (!cur) return c.json({ error: "not found" }, 404);
+
   const patch = {};
-  if (typeof body.done === "boolean") patch.done = body.done;
+  if (typeof body.done === "boolean") {
+    // Checking off a recurring task rolls it to the next run instead of closing.
+    if (body.done && cur.repeat) {
+      patch.remindAt = advance(cur.repeat, cur.remindAt);
+      patch.remindedAt = null;
+    } else {
+      patch.done = body.done;
+    }
+  }
   if (CAPTURE_TYPES.has(body.type)) patch.type = body.type;
   if (typeof body.title === "string" && body.title.trim()) patch.title = body.title.trim();
+  if (body.repeat === null) patch.repeat = null; // stop repeating
   // Reminder controls: set/clear an exact time, or snooze N minutes from now.
   // Any change resets remindedAt so the new time fires.
   if (typeof body.snoozeMinutes === "number") {
@@ -190,14 +215,20 @@ app.patch("/api/items/:id", async (c) => {
   } else if (typeof body.remindAt === "number") {
     patch.remindAt = body.remindAt;
     patch.remindedAt = null;
-  } else if (body.remindAt === null) {
+  } else if (body.remindAt === null && patch.remindAt === undefined) {
     patch.remindAt = null;
     patch.remindedAt = null;
   }
-  const it = await store.updateItem(c.req.param("id"), patch);
-  if (!it) return c.json({ error: "not found" }, 404);
+  const it = await store.updateItem(id, patch);
   return c.json({ ok: true, item: shape(it) });
 });
+
+// Next run strictly after now, from a (possibly stale) anchor time.
+function advance(repeat, from) {
+  let next = nextOccurrence(repeat, from || Date.now());
+  for (let i = 0; next <= Date.now() && i < 1200; i++) next = nextOccurrence(repeat, next);
+  return next;
+}
 
 // Send the daily digest now (also runs automatically once a day).
 app.post("/api/digest", async (c) => c.json({ ok: true, text: await runDigest() }));

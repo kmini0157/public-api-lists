@@ -209,6 +209,7 @@ details summary { cursor: pointer; color: var(--muted); font-size: 0.88rem; }
 }
 .rbadge.over { background: #3a1f22; color: #ff9b9b; }
 .rbadge.none { background: transparent; color: var(--muted); font-weight: 500; padding-left: 0; }
+.rbadge.rep { background: #25313a; color: #8fe0d8; }
 .rbtn {
   background: none;
   border: 1px solid var(--line);

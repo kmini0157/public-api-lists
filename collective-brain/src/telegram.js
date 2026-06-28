@@ -3,7 +3,7 @@
 // message (or text) and it transcribes → classifies → stores, then replies with
 // what it filed.
 import { transcribe } from "./stt.js";
-import { formatRemind } from "./datetime.js";
+import { formatRemind, describeRepeat } from "./datetime.js";
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const CHAT = process.env.TELEGRAM_CHAT_ID; // default target for digests
@@ -67,7 +67,8 @@ export async function handleUpdate(update, { storeCapture, triage }) {
     const t = await triage(text);
     const item = await storeCapture({ text, ...t, source: "telegram", chatId });
     const tagLine = item.tags?.length ? `\n#${item.tags.join(" #")}` : "";
-    const remindLine = item.remindAt ? `\n⏰ ${formatRemind(item.remindAt)} 알림` : "";
+    const repeatStr = item.repeat ? ` · 🔁 ${describeRepeat(item.repeat, item.remindAt)}` : "";
+    const remindLine = item.remindAt ? `\n⏰ ${formatRemind(item.remindAt)}${repeatStr} 알림` : "";
     await send(
       chatId,
       `${EMOJI[item.type] || "📝"} ${item.type} 저장됨\n“${item.title}”${tagLine}${remindLine}`,
